@@ -1,4 +1,5 @@
 import ComponentsDashboardSales from '@/components/dashboard/components-dashboard-sales';
+import Dashboard from '@/components/components/Nhom5/Dashboard';
 import React from 'react';
 
 export const metadata = {
@@ -6,7 +7,7 @@ export const metadata = {
 };
 
 const Sales = () => {
-    return <ComponentsDashboardSales />;
+    return <Dashboard />;
 };
 
 export default Sales;
