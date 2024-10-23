@@ -3,7 +3,7 @@ import { initializeApp } from "firebase/app";
 import { getDatabase } from "firebase/database";
 
 const firebaseConfig = {
-    apiKey: "AIzaSyBk1bsPhrBViDMYsUJNgHrb_eT4hA1frVs",
+    apiKey: "",
     authDomain: "iotnhom5-8942c.firebaseapp.com",
     databaseURL: "https://iotnhom5-8942c-default-rtdb.asia-southeast1.firebasedatabase.app",
     projectId: "iotnhom5-8942c",
