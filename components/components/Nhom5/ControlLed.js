@@ -180,7 +180,10 @@ const DeviceControl = () => {
     },
   });
   const [termInput, setTermInput] = useState('');
-  const [isAutoMode, setIsAutoMode] = useState(true);
+  const [isAutoMode, setIsAutoMode] = useState(() => {
+    const savedMode = localStorage.getItem('isAutoMode');
+    return savedMode !== null ? JSON.parse(savedMode) : true;
+  });
   const [config, setConfig] = useState({
     temperatureThreshold: 37.5,
     humidityThreshold: 60,
@@ -191,6 +194,7 @@ const DeviceControl = () => {
     humidity: null,
     lux: null,
   });
+  
 
   // Tải cấu hình từ local storage
   useEffect(() => {
@@ -323,7 +327,11 @@ const DeviceControl = () => {
   };
 
   const handleAutoModeToggle = () => {
-    setIsAutoMode(!isAutoMode);
+    setIsAutoMode((prevMode) => {
+      const newMode = !prevMode;
+      localStorage.setItem('isAutoMode', JSON.stringify(newMode));
+      return newMode;
+    });
   };
 
   const handleConfigChange = (key, value) => {
