@@ -272,9 +272,9 @@ const DeviceControl = () => {
 
       // Điều khiển Đèn LED
       if (temperature < config.temperatureThreshold && !devices.LED) {
-        toggleDevice('FAN');
+        toggleDevice('LED');
       } else if (temperature >= config.temperatureThreshold && devices.FAN) {
-        toggleDevice('FAN');
+        toggleDevice('LED');
       }
 
       // Điều khiển Phun sương
