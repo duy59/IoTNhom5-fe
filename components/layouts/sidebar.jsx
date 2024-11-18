@@ -141,7 +141,7 @@ const Sidebar = () => {
                                         </Link>
                                     </li>
                                     <li className="nav-item">
-                                        <Link href="control" className="group">
+                                        <Link href="/control" className="group">
                                             <div className="flex items-center">
                                                 <span
                                                     className="text-black ltr:pl-3 rtl:pr-3 dark:text-[#506690] dark:group-hover:text-white-dark">{t('Control')}</span>
@@ -149,6 +149,14 @@ const Sidebar = () => {
                                         </Link>
                                     </li>
                                     <li className="nav-item">
+                                        <Link href="/chuki" className="group">
+                                            <div className="flex items-center">
+                                                <span
+                                                    className="text-black ltr:pl-3 rtl:pr-3 dark:text-[#506690] dark:group-hover:text-white-dark">{t('Cycle')}</span>
+                                            </div>
+                                        </Link>
+                                    </li>
+                                    {/* <li className="nav-item">
                                         <Link href="" className="group">
                                             <div className="flex items-center">
                                                 <IconMenuTodo className="shrink-0 group-hover:!text-primary" />
@@ -156,7 +164,7 @@ const Sidebar = () => {
                                                     className="text-black ltr:pl-3 rtl:pr-3 dark:text-[#506690] dark:group-hover:text-white-dark">{t('Công')}</span>
                                             </div>
                                         </Link>
-                                    </li>
+                                    </li> */}
                                 </ul>
                             </li>
 

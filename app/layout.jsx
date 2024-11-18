@@ -4,11 +4,13 @@ import '../styles/tailwind.css';
 import { Nunito } from 'next/font/google';
 
 export const metadata = {
-    title: {
-        template: '%s | VRISTO - Multipurpose Tailwind Dashboard Template',
-        default: 'IoT Nhom 5',
+    title: 'IoT Nhom 5',
+    description: 'IoT Nhom 5',
+    icons: {
+        icon: '/logo.jpg',
     },
 };
+
 const nunito = Nunito({
     weight: ['400', '500', '600', '700', '800'],
     subsets: ['latin'],
@@ -21,6 +23,9 @@ export default function RootLayout({
 }) {
     return (
         <html lang="en">
+            <head>
+                <link rel="icon" href="/logo.jpg" type="image/jpeg" />
+            </head>
             <body className={nunito.variable}>
                 <ProviderComponent>{children}</ProviderComponent>
             </body>
