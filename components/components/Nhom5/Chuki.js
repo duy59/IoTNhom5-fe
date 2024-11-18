@@ -1,6 +1,6 @@
 "use client"
 import React, { useState, useEffect } from 'react';
-import { collection, query, orderBy, onSnapshot, where, Timestamp } from 'firebase/firestore';
+import { collection, query, orderBy, onSnapshot, where, Timestamp, doc, setDoc, deleteDoc } from 'firebase/firestore';
 import { firestoreDb } from '../../Database/firebaseConfig';
 import { Card, Button, List, Alert, Space, Typography, notification } from 'antd';
 import { ReloadOutlined } from '@ant-design/icons';
@@ -12,23 +12,29 @@ const HatchCycleManager = () => {
     const [sensorData, setSensorData] = useState([]);
     const [loading, setLoading] = useState(true);
 
-    // Load hatch cycle data on mount
+    // Lấy dữ liệu chu kỳ ấp từ Firestore
     useEffect(() => {
-        const loadHatchCycle = async () => {
-            try {
-                const savedCycle = localStorage.getItem('hatchCycle');
-                if (savedCycle) {
-                    setHatchCycle(JSON.parse(savedCycle));
-                }
-            } catch (error) {
-                console.error('Error loading hatch cycle:', error);
+        const hatchCycleDoc = doc(firestoreDb, 'hatchCycles', 'currentCycle');
+        
+        const unsubscribe = onSnapshot(hatchCycleDoc, (docSnapshot) => {
+            if (docSnapshot.exists()) {
+                const data = docSnapshot.data();
+                // Chuyển đổi Timestamp thành Date
+                setHatchCycle({
+                    ...data,
+                    startDate: data.startDate.toDate().toISOString(),
+                    expectedHatchDate: data.expectedHatchDate.toDate().toISOString(),
+                });
+            } else {
+                setHatchCycle(null);
             }
-        };
+            setLoading(false);
+        });
 
-        loadHatchCycle();
+        return () => unsubscribe();
     }, []);
 
-    // Fetch real-time sensor data from Firebase
+    // Lấy dữ liệu cảm biến từ Firebase
     useEffect(() => {
         if (!hatchCycle) return;
 
@@ -47,9 +53,8 @@ const HatchCycleManager = () => {
                     id: doc.id,
                     ...doc.data(),
                 }));
-                console.log('Sensor data:', data);
                 setSensorData(data);
-                checkConditions(data); // Kiểm tra điều kiện và hiển thị thông báo
+                checkConditions(data);
                 setLoading(false);
             });
 
@@ -58,6 +63,7 @@ const HatchCycleManager = () => {
 
         fetchSensorData();
     }, [hatchCycle]);
+
 
     // Kiểm tra điều kiện và hiển thị thông báo
     const checkConditions = (data) => {
@@ -121,37 +127,47 @@ const HatchCycleManager = () => {
         expectedHatchDate.setDate(startDate.getDate() + 21);
 
         const newCycle = {
-            startDate: startDate.toISOString(),
-            expectedHatchDate: expectedHatchDate.toISOString(),
+            startDate: Timestamp.fromDate(startDate),
+            expectedHatchDate: Timestamp.fromDate(expectedHatchDate),
             daysElapsed: 0,
-            sensorLogs: [],
+            createdAt: Timestamp.now(),
         };
 
         try {
-            localStorage.setItem('hatchCycle', JSON.stringify(newCycle));
-            setHatchCycle(newCycle);
+            // Lưu vào Firestore
+            await setDoc(doc(firestoreDb, 'hatchCycles', 'currentCycle'), newCycle);
             notification.success({
                 message: 'Thành công',
                 description: 'Chu kỳ ấp trứng đã bắt đầu!',
             });
         } catch (error) {
             console.error('Error starting hatch cycle:', error);
+            notification.error({
+                message: 'Lỗi',
+                description: 'Không thể bắt đầu chu kỳ ấp trứng!',
+            });
         }
     };
 
+    // Đặt lại chu kỳ ấp
     const resetHatchCycle = async () => {
         try {
-            localStorage.removeItem('hatchCycle');
-            setHatchCycle(null);
+            // Xóa từ Firestore
+            await deleteDoc(doc(firestoreDb, 'hatchCycles', 'currentCycle'));
             notification.success({
                 message: 'Thành công',
                 description: 'Chu kỳ ấp trứng đã được đặt lại!',
             });
         } catch (error) {
             console.error('Error resetting hatch cycle:', error);
+            notification.error({
+                message: 'Lỗi',
+                description: 'Không thể đặt lại chu kỳ ấp trứng!',
+            });
         }
     };
 
+    // Các hàm tiện ích (giữ nguyên như cũ)
     const calculateAverage = (data, key) => {
         if (data.length === 0) return 0;
         const total = data.reduce((sum, item) => sum + item[key], 0);
