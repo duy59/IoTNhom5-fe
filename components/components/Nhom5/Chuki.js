@@ -47,6 +47,7 @@ const HatchCycleManager = () => {
                     id: doc.id,
                     ...doc.data(),
                 }));
+                console.log('Sensor data:', data);
                 setSensorData(data);
                 checkConditions(data); // Kiểm tra điều kiện và hiển thị thông báo
                 setLoading(false);
