@@ -121,17 +121,18 @@ const DeviceControl = () => {
     if (sensorData && isAutoMode) {
       const { temperature, humidity, lux } = sensorData;
 
-      // Điều khiển Quạt
-      if (temperature > config.temperatureThreshold && !devices.FAN) {
+      // Control FAN
+      if (temperature > config.temperatureThreshold  && !devices.FAN) {
         toggleDevice('FAN');
       } else if (temperature <= config.temperatureThreshold && devices.FAN) {
         toggleDevice('FAN');
       }
 
-      // Điều khiển Đèn LED
-      if (temperature > config.temperatureThreshold && !devices.FAN) {
+
+      // Control Heater
+      if (temperature < config.temperatureThreshold && !devices.LED) {
         toggleDevice('LED');
-      } else if (temperature <= config.temperatureThreshold && devices.FAN) {
+      } else if (temperature >= config.temperatureThreshold && devices.LED) {
         toggleDevice('LED');
       }
 
@@ -239,7 +240,7 @@ const DeviceControl = () => {
               boxShadow={3}
             >
               <Typography variant="h6" gutterBottom>
-                {device === 'FAN' ? 'Quạt' : device === 'LED' ? 'Đèn LED' : 'Phun sương'}
+                {device === 'FAN' ? 'Đèn LED' : device === 'LED' ? 'Quạt' : 'Phun sương'}
               </Typography>
               <Switch
                 checked={devices[device]}
