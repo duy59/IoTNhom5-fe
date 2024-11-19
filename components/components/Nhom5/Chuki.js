@@ -1,245 +1,347 @@
-"use client"
+"use client";
 import React, { useState, useEffect } from 'react';
-import { collection, query, orderBy, onSnapshot, where, Timestamp, doc, setDoc, deleteDoc } from 'firebase/firestore';
-import { firestoreDb } from '../../Database/firebaseConfig';
-import { Card, Button, List, Alert, Space, Typography, notification } from 'antd';
+import {
+  collection,
+  query,
+  where,
+  onSnapshot,
+  addDoc,
+  doc,
+  updateDoc,
+  orderBy,
+  Timestamp,
+} from 'firebase/firestore';
+import {
+  getStorage,
+  ref as storageRef,
+  listAll,
+  getDownloadURL,
+} from 'firebase/storage';
+import { firestoreDb, storage } from '../../Database/firebaseConfig';
+import {
+  Card,
+  Button,
+  List,
+  Alert,
+  Space,
+  Typography,
+  notification,
+  Input,
+  Modal,
+  Image,
+  Carousel,
+} from 'antd';
 import { ReloadOutlined } from '@ant-design/icons';
 
 const { Title, Text } = Typography;
 
 const HatchCycleManager = () => {
-    const [hatchCycle, setHatchCycle] = useState(null);
-    const [sensorData, setSensorData] = useState([]);
-    const [loading, setLoading] = useState(true);
+  const [hatchCycle, setHatchCycle] = useState(null);
+  const [sensorData, setSensorData] = useState([]);
+  const [photoURLs, setPhotoURLs] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [showCreateForm, setShowCreateForm] = useState(false);
+  const [cycleName, setCycleName] = useState('');
+  const [numberOfEggs, setNumberOfEggs] = useState('');
 
-    // Lấy dữ liệu chu kỳ ấp từ Firestore
-    useEffect(() => {
-        const hatchCycleDoc = doc(firestoreDb, 'hatchCycles', 'currentCycle');
-        
-        const unsubscribe = onSnapshot(hatchCycleDoc, (docSnapshot) => {
-            if (docSnapshot.exists()) {
-                const data = docSnapshot.data();
-                // Chuyển đổi Timestamp thành Date
-                setHatchCycle({
-                    ...data,
-                    startDate: data.startDate.toDate().toISOString(),
-                    expectedHatchDate: data.expectedHatchDate.toDate().toISOString(),
-                });
-            } else {
-                setHatchCycle(null);
-            }
-            setLoading(false);
-        });
+  // Lấy danh sách ảnh từ Firebase Storage
+  const fetchPhotos = async () => {
+    try {
+      const photosRef = storageRef(storage, 'photos/'); // Thư mục photos/
+      const result = await listAll(photosRef);
+      const urls = await Promise.all(
+        result.items.map((item) => getDownloadURL(item))
+      );
+      setPhotoURLs(urls);
+    } catch (error) {
+      console.error('Lỗi khi tải ảnh:', error);
+    }
+  };
 
-        return () => unsubscribe();
-    }, []);
+  // Lấy dữ liệu cảm biến từ Firestore
+  useEffect(() => {
+    if (!hatchCycle) return;
 
-    // Lấy dữ liệu cảm biến từ Firebase
-    useEffect(() => {
-        if (!hatchCycle) return;
+    const fetchSensorData = () => {
+      setLoading(true);
 
-        const fetchSensorData = () => {
-            setLoading(true);
+      const startDate = hatchCycle.startDate; // Firestore Timestamp
+      const q = query(
+        collection(firestoreDb, 'SensorData'),
+        // where('timestamp', '>=', startDate), // Lấy dữ liệu từ startDate trở đi
+        orderBy('timestamp', 'asc') // Sắp xếp theo thời gian tăng dần
+      );
 
-            const startDate = Timestamp.fromDate(new Date(hatchCycle.startDate));
-            const q = query(
-                collection(firestoreDb, 'SensorData'),
-                where('timestamp', '>=', startDate),
-                orderBy('timestamp', 'desc')
-            );
+      const unsubscribe = onSnapshot(q, (querySnapshot) => {
+        const data = querySnapshot.docs.map((doc) => ({
+          id: doc.id,
+          ...doc.data(),
+        }));
+        setSensorData(data);
+        fetchPhotos();
+        setLoading(false);
+      });
 
-            const unsubscribe = onSnapshot(q, querySnapshot => {
-                const data = querySnapshot.docs.map(doc => ({
-                    id: doc.id,
-                    ...doc.data(),
-                }));
-                setSensorData(data);
-                checkConditions(data);
-                setLoading(false);
-            });
-
-            return () => unsubscribe();
-        };
-
-        fetchSensorData();
-    }, [hatchCycle]);
-
-
-    // Kiểm tra điều kiện và hiển thị thông báo
-    const checkConditions = (data) => {
-        if (data.length === 0) return;
-
-        const latestData = data[0];
-        const avgTemp = calculateAverage(data, 'temperature');
-        const avgHumidity = calculateAverage(data, 'humidity');
-
-        // Kiểm tra nhiệt độ
-        if (latestData.temperature > 38.5) {
-            notification.warning({
-                message: 'Cảnh báo nhiệt độ cao',
-                description: 'Nhiệt độ hiện tại vượt quá 38.5°C. Cần điều chỉnh giảm nhiệt độ.',
-                duration: 0,
-            });
-        } else if (latestData.temperature < 37) {
-            notification.warning({
-                message: 'Cảnh báo nhiệt độ thấp',
-                description: 'Nhiệt độ hiện tại dưới 37°C. Cần điều chỉnh tăng nhiệt độ.',
-                duration: 0,
-            });
-        }
-
-        // Kiểm tra độ ẩm
-        if (latestData.humidity > 65) {
-            notification.warning({
-                message: 'Cảnh báo độ ẩm cao',
-                description: 'Độ ẩm hiện tại vượt quá 65%. Cần giảm độ ẩm.',
-                duration: 0,
-            });
-        } else if (latestData.humidity < 55) {
-            notification.warning({
-                message: 'Cảnh báo độ ẩm thấp',
-                description: 'Độ ẩm hiện tại dưới 55%. Cần tăng độ ẩm.',
-                duration: 0,
-            });
-        }
-
-        // Kiểm tra trung bình
-        if (avgTemp > 38 || avgTemp < 37.5) {
-            notification.warning({
-                message: 'Cảnh báo nhiệt độ trung bình',
-                description: `Nhiệt độ trung bình (${avgTemp}°C) nằm ngoài khoảng tối ưu (37.5°C - 38°C).`,
-                duration: 0,
-            });
-        }
-
-        if (avgHumidity > 63 || avgHumidity < 57) {
-            notification.warning({
-                message: 'Cảnh báo độ ẩm trung bình',
-                description: `Độ ẩm trung bình (${avgHumidity}%) nằm ngoài khoảng tối ưu (57% - 63%).`,
-                duration: 0,
-            });
-        }
+      return () => unsubscribe();
     };
 
-    const startHatchCycle = async () => {
-        const startDate = new Date();
-        const expectedHatchDate = new Date(startDate);
-        expectedHatchDate.setDate(startDate.getDate() + 21);
+    fetchSensorData();
+  }, [hatchCycle]);
 
-        const newCycle = {
-            startDate: Timestamp.fromDate(startDate),
-            expectedHatchDate: Timestamp.fromDate(expectedHatchDate),
-            daysElapsed: 0,
-            createdAt: Timestamp.now(),
-        };
+  // Lấy dữ liệu chu kỳ ấp từ Firestore
+  useEffect(() => {
+    const fetchHatchCycle = () => {
+      setLoading(true);
+      const q = query(
+        collection(firestoreDb, 'chuki'),
+        where('status', '==', 'doing')
+      );
 
+      const unsubscribe = onSnapshot(q, (querySnapshot) => {
+        if (!querySnapshot.empty) {
+          const data = querySnapshot.docs[0].data();
+          setHatchCycle({ id: querySnapshot.docs[0].id, ...data });
+        } else {
+          setHatchCycle(null);
+        }
+        setLoading(false);
+      });
+
+      return () => unsubscribe();
+    };
+
+    fetchHatchCycle();
+  }, []);
+
+  // Bắt đầu chu kỳ ấp mới
+  const startNewHatchCycle = async () => {
+    if (!cycleName || !numberOfEggs) {
+      notification.error({
+        message: 'Lỗi',
+        description: 'Vui lòng điền đầy đủ thông tin trước khi tạo chu kỳ mới.',
+      });
+      return;
+    }
+
+    const startDate = new Date();
+    const expectedDate = new Date(startDate);
+    expectedDate.setDate(startDate.getDate() + 21); // 21 ngày
+
+    const status = 'doing';
+
+    try {
+      await addDoc(collection(firestoreDb, 'chuki'), {
+        name: cycleName,
+        startDate: Timestamp.fromDate(startDate),
+        expectedDate: Timestamp.fromDate(expectedDate),
+        numberOfEggs: Number(numberOfEggs),
+        status,
+      });
+      notification.success({
+        message: 'Thành công',
+        description: 'Chu kỳ mới đã được tạo!',
+      });
+      setCycleName('');
+      setNumberOfEggs('');
+      setShowCreateForm(false);
+    } catch (error) {
+      console.error('Error creating new hatch cycle:', error);
+      notification.error({
+        message: 'Lỗi',
+        description: 'Không thể tạo chu kỳ mới.',
+      });
+    }
+  };
+
+  // Quản lý chu kỳ ấp
+  const manageHatchCycle = () => {
+    Modal.confirm({
+      title: 'Quản lý chu kỳ',
+      content: 'Bạn muốn làm gì với chu kỳ này?',
+      okText: 'Hoàn thành',
+      cancelText: 'Đóng',
+      onOk: async () => {
         try {
-            // Lưu vào Firestore
-            await setDoc(doc(firestoreDb, 'hatchCycles', 'currentCycle'), newCycle);
+          if (hatchCycle) {
+            const cycleDocRef = doc(firestoreDb, 'chuki', hatchCycle.id);
+            await updateDoc(cycleDocRef, { status: 'done' });
             notification.success({
-                message: 'Thành công',
-                description: 'Chu kỳ ấp trứng đã bắt đầu!',
+              message: 'Thành công',
+              description: 'Chu kỳ đã được đánh dấu là hoàn thành!',
             });
+            setHatchCycle(null);
+          }
         } catch (error) {
-            console.error('Error starting hatch cycle:', error);
-            notification.error({
-                message: 'Lỗi',
-                description: 'Không thể bắt đầu chu kỳ ấp trứng!',
-            });
+          console.error('Error completing hatch cycle:', error);
+          notification.error({
+            message: 'Lỗi',
+            description: 'Không thể hoàn thành chu kỳ.',
+          });
         }
-    };
+      },
+      onCancel: () => {},
+      afterClose: () => {},
+    });
+  };
 
-    // Đặt lại chu kỳ ấp
-    const resetHatchCycle = async () => {
-        try {
-            // Xóa từ Firestore
-            await deleteDoc(doc(firestoreDb, 'hatchCycles', 'currentCycle'));
-            notification.success({
-                message: 'Thành công',
-                description: 'Chu kỳ ấp trứng đã được đặt lại!',
-            });
-        } catch (error) {
-            console.error('Error resetting hatch cycle:', error);
-            notification.error({
-                message: 'Lỗi',
-                description: 'Không thể đặt lại chu kỳ ấp trứng!',
-            });
-        }
-    };
+  // Tính toán giá trị trung bình
+  const calculateAverage = (key) => {
+    if (sensorData.length === 0) return 'N/A';
+    const total = sensorData.reduce((sum, item) => sum + item[key], 0);
+    return (total / sensorData.length).toFixed(1);
+  };
 
-    // Các hàm tiện ích (giữ nguyên như cũ)
-    const calculateAverage = (data, key) => {
-        if (data.length === 0) return 0;
-        const total = data.reduce((sum, item) => sum + item[key], 0);
-        return Number((total / data.length).toFixed(1));
-    };
+  // Dự đoán trạng thái lồng ấp
+  const predictIncubatorStatus = (avgTemperature, avgHumidity) => {
+    if (avgTemperature === 'N/A' || avgHumidity === 'N/A') {
+      return 'Dữ liệu không đủ để dự đoán.';
+    }
 
-    const averageTemperature = calculateAverage(sensorData, 'temperature');
-    const averageHumidity = calculateAverage(sensorData, 'humidity');
+    const isTemperatureStable =
+      avgTemperature >= 37 && avgTemperature <= 39; // Tiêu chuẩn nhiệt độ
+    const isHumidityStable = avgHumidity >= 55 && avgHumidity <= 65; // Tiêu chuẩn độ ẩm
 
-    return (
-        <div className="p-6">
-            <div className="flex justify-between items-center mb-6">
-                <Title level={2}>Quản lý chu kỳ ấp trứng</Title>
-                {hatchCycle && (
-                    <Button
-                        type="primary"
-                        danger
-                        icon={<ReloadOutlined />}
-                        onClick={resetHatchCycle}
-                    >
-                        Đặt lại
-                    </Button>
-                )}
-            </div>
+    if (isTemperatureStable && isHumidityStable) {
+      return 'Lồng ấp đang hoạt động ổn định.';
+    } else if (!isTemperatureStable && !isHumidityStable) {
+      return 'Cảnh báo: Nhiệt độ và độ ẩm không đạt yêu cầu!';
+    } else if (!isTemperatureStable) {
+      return 'Cảnh báo: Nhiệt độ không đạt yêu cầu!';
+    } else {
+      return 'Cảnh báo: Độ ẩm không đạt yêu cầu!';
+    }
+  };
 
-            {!hatchCycle ? (
-                <Card>
-                    <Text className="block mb-4 text-gray-600 text-lg">
-                        Chưa có chu kỳ ấp trứng nào.
-                    </Text>
-                    <Button type="primary" onClick={startHatchCycle}>
-                        Bắt đầu chu kỳ ấp trứng
-                    </Button>
-                </Card>
+  const averageTemperature = calculateAverage('temperature');
+  const averageHumidity = calculateAverage('humidity');
+
+  return (
+    <div className="p-6">   
+        <style>
+        {`
+          .ant-modal-confirm-btns .ant-btn-primary {
+            background-color: #1890ff; /* Màu nền xanh */
+            border-color: #1890ff; /* Màu viền xanh */
+          }
+
+          .ant-modal-confirm-btns .ant-btn-primary:hover {
+            background-color: #40a9ff; /* Màu nền khi hover */
+            border-color: #40a9ff; /* Màu viền khi hover */
+          }
+        `}
+      </style>
+      <Title level={2} style={{ textAlign: 'center' }}>
+        Quản lý chu kỳ ấp trứng
+      </Title>
+
+      {loading ? (
+        <Text>Đang tải dữ liệu...</Text>
+      ) : hatchCycle ? (
+        <>
+          <Card>
+            <Title level={4}>Thông tin chu kỳ</Title>
+            <Text>Tên chu kỳ: {hatchCycle.name}</Text>
+            <br />
+            <Text>
+              Ngày bắt đầu:{' '}
+              {new Date(hatchCycle.startDate.toDate()).toLocaleDateString()}
+            </Text>
+            <br />
+            <Text>
+              Ngày dự kiến hoàn thành:{' '}
+              {new Date(hatchCycle.expectedDate.toDate()).toLocaleDateString()}
+            </Text>
+            <br />
+            <Text>Số lượng trứng: {hatchCycle.numberOfEggs}</Text>
+            <br />
+            <Text>
+              Trạng thái:{' '}
+              {hatchCycle.status === 'doing' ? 'Đang ấp' : 'Hoàn thành'}
+            </Text>
+            <br />
+            <Button
+              type="primary"
+              danger
+              icon={<ReloadOutlined />}
+              onClick={manageHatchCycle}
+              style={{ marginTop: '10px' }}
+            >
+              Quản lý chu kỳ
+            </Button>
+          </Card>
+
+          <Card style={{ marginTop: '20px' }}>
+            <Title level={4}>Dữ liệu cảm biến</Title>
+            <Text>
+              Nhiệt độ trung bình toàn chu kỳ: {averageTemperature}°C
+            </Text>
+            <br />
+            <Text>Độ ẩm trung bình toàn chu kỳ: {averageHumidity}%</Text>
+            <br />
+            <Text type="danger" style={{ fontWeight: 'bold', marginTop: '10px' }}>
+              {predictIncubatorStatus(
+                parseFloat(averageTemperature),
+                parseFloat(averageHumidity)
+              )}
+            </Text>
+          </Card>
+
+          <Card style={{ marginTop: '20px' }}>
+            <Title level={4}>Ảnh từ lồng ấp</Title>
+            {photoURLs.length > 0 ? (
+              <Carousel autoplay>
+                {photoURLs.map((url, index) => (
+                  <div key={index}>
+                    <Image src={url} alt={`Photo ${index}`} />
+                  </div>
+                ))}
+              </Carousel>
             ) : (
-                <Space direction="vertical" className="w-full" size="large">
-                    <Card title="Thông tin chu kỳ">
-                        <Text>Ngày bắt đầu: {new Date(hatchCycle.startDate).toLocaleDateString()}</Text>
-                        <br />
-                        <Text>Ngày dự kiến nở: {new Date(hatchCycle.expectedHatchDate).toLocaleDateString()}</Text>
-                        <br />
-                        <Text>Số ngày đã trôi qua: {hatchCycle.daysElapsed}</Text>
-                    </Card>
-
-                    <Card title="Thống kê">
-                        <Text>Nhiệt độ trung bình: {averageTemperature}°C</Text>
-                        <br />
-                        <Text>Độ ẩm trung bình: {averageHumidity}%</Text>
-                    </Card>
-
-                    <Card title="Dữ liệu cảm biến hiện tại">
-                        {loading ? (
-                            <Text>Đang tải dữ liệu...</Text>
-                        ) : (
-                            <List
-                                dataSource={sensorData}
-                                renderItem={item => (
-                                    <List.Item>
-                                        <Space direction="vertical">
-                                            <Text>Thời gian: {new Date(item.timestamp.toDate()).toLocaleString()}</Text>
-                                            <Text>Nhiệt độ: {item.temperature}°C</Text>
-                                            <Text>Độ ẩm: {item.humidity}%</Text>
-                                        </Space>
-                                    </List.Item>
-                                )}
-                            />
-                        )}
-                    </Card>
-                </Space>
+              <Text>Không có ảnh nào.</Text>
             )}
-        </div>
-    );
+          </Card>
+        </>
+      ) : showCreateForm ? (
+        <Card>
+          <Title level={4} style={{ textAlign: 'center' }}>
+            Tạo chu kỳ mới
+          </Title>
+          <Input
+            placeholder="Tên chu kỳ"
+            value={cycleName}
+            onChange={(e) => setCycleName(e.target.value)}
+            style={{ marginBottom: '15px' }}
+          />
+          <Input
+            placeholder="Số lượng trứng"
+            value={numberOfEggs}
+            onChange={(e) => setNumberOfEggs(e.target.value)}
+            style={{ marginBottom: '15px' }}
+            type="number"
+          />
+          <Space style={{ justifyContent: 'center' }}>
+            <Button type="primary" style={{backgroundColor : '#1890ff'}} onClick={startNewHatchCycle}>
+              Tạo
+            </Button>
+            <Button onClick={() => setShowCreateForm(false)}>Hủy</Button>
+          </Space>
+        </Card>
+      ) : (
+        <Card>
+          <Text style={{ fontSize: '18px', color: '#757575' }}>
+            Chưa có chu kỳ nào đang hoạt động.
+          </Text>
+          <Button
+            type="primary"
+            onClick={() => setShowCreateForm(true)}
+            style={{ marginTop: '20px', backgroundColor: '#1890ff' }}
+          >
+            Tạo chu kỳ mới
+          </Button>
+        </Card>
+      )}
+    </div>
+  );
 };
 
 export default HatchCycleManager;
