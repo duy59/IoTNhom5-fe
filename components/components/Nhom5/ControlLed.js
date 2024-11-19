@@ -240,7 +240,7 @@ const DeviceControl = () => {
               boxShadow={3}
             >
               <Typography variant="h6" gutterBottom>
-                {device === 'FAN' ? 'Đèn LED' : device === 'LED' ? 'Quạt' : 'Phun sương'}
+                {device === 'FAN' ? 'Quạt' : device === 'LED' ? 'Đèn LED' : 'Phun sương'}
               </Typography>
               <Switch
                 checked={devices[device]}
