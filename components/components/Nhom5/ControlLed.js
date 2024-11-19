@@ -129,9 +129,9 @@ const DeviceControl = () => {
       }
 
       // Điều khiển Đèn LED
-      if (lux < config.luxThreshold && !devices.LED) {
+      if (temperature > config.temperatureThreshold && !devices.FAN) {
         toggleDevice('LED');
-      } else if (lux >= config.luxThreshold && devices.LED) {
+      } else if (temperature <= config.temperatureThreshold && devices.FAN) {
         toggleDevice('LED');
       }
 
