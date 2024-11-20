@@ -2,24 +2,52 @@
 import React, { useState, useEffect } from 'react';
 import { ref, set, onValue } from 'firebase/database';
 import { database } from '../../Database/firebaseConfig';
+import { Grid } from '@mui/material';
 
 const Camera = () => {
   const [mode, setMode] = useState('manual');
   const [latestPhoto, setLatestPhoto] = useState('');
+  const [autoPhotos, setAutoPhotos] = useState([]);
   const [timeValue, setTimeValue] = useState('');
-  const [timeUnit, setTimeUnit] = useState('minutes'); // 'minutes' or 'hours'
+  const [timeUnit, setTimeUnit] = useState('minutes');
+  const [currentInterval, setCurrentInterval] = useState(null);
 
   useEffect(() => {
-    // Lắng nghe thay đổi ảnh mới nhất
+    // Lắng nghe trạng thái hiện tại từ Firebase
+    const captureRef = ref(database, 'capture');
+    onValue(captureRef, (snapshot) => {
+      if (snapshot.exists()) {
+        const data = snapshot.val();
+        setMode(data.mode);
+        if (data.mode === 'auto') {
+          const intervalInSeconds = data.interval;
+          setCurrentInterval(intervalInSeconds);
+          // Chuyển đổi ngược lại để hiển thị trong input
+          if (intervalInSeconds >= 3600) {
+            setTimeValue((intervalInSeconds / 3600).toString());
+            setTimeUnit('hours');
+          } else if (intervalInSeconds > 0) {
+            setTimeValue((intervalInSeconds / 60).toString());
+            setTimeUnit('minutes');
+          }
+        }
+      }
+    });
+
+    // Lắng nghe thay đổi ảnh
     const photosRef = ref(database, 'photos');
     onValue(photosRef, (snapshot) => {
       if (snapshot.exists()) {
         const photos = snapshot.val();
         const photoUrls = Object.values(photos);
         setLatestPhoto(photoUrls[photoUrls.length - 1]);
+        
+        if (mode === 'auto') {
+          setAutoPhotos(photoUrls);
+        }
       }
     });
-  }, []);
+  }, [mode]);
 
   const handleCapture = () => {
     const captureRef = ref(database, 'capture');
@@ -29,7 +57,6 @@ const Camera = () => {
       interval: 0
     });
     
-    // Reset command sau 1 giây
     setTimeout(() => {
       set(captureRef, {
         command: false,
@@ -40,22 +67,51 @@ const Camera = () => {
   };
 
   const handleAutoMode = () => {
-    const milliseconds = calculateMilliseconds();
+    const seconds = calculateSeconds();
     const captureRef = ref(database, 'capture');
     set(captureRef, {
       command: false,
       mode: 'auto',
-      interval: milliseconds
+      interval: seconds
     });
+    setCurrentInterval(seconds);
   };
 
-  const calculateMilliseconds = () => {
+  const calculateSeconds = () => {
     const value = parseInt(timeValue);
     if (timeUnit === 'minutes') {
-      return value * 60 * 1000; // Chuyển phút sang milliseconds
+      return value * 60;
     } else {
-      return value * 60 * 60 * 1000; // Chuyển giờ sang milliseconds
+      return value * 60 * 60;
     }
+  };
+
+  const handleModeChange = (newMode) => {
+    const captureRef = ref(database, 'capture');
+    if (newMode === 'manual') {
+      set(captureRef, {
+        command: true,
+        mode: 'manual',
+        interval: 0
+      });
+      
+      setTimeout(() => {
+        set(captureRef, {
+          command: false,
+          mode: 'manual',
+          interval: 0
+        });
+      }, 1000);
+    } else {
+      // Khi chuyển sang auto mode, giữ nguyên interval hiện tại
+      set(captureRef, {
+        command: false,
+        mode: 'auto',
+        interval: currentInterval || 0
+      });
+      setAutoPhotos([]);
+    }
+    setMode(newMode);
   };
 
   return (
@@ -66,13 +122,13 @@ const Camera = () => {
         <div className="mode-buttons">
           <button 
             className={`mode-btn ${mode === 'manual' ? 'active' : ''}`}
-            onClick={() => setMode('manual')}>
+            onClick={() => handleModeChange('manual')}>
             <i className="fas fa-camera"></i>
             Manual Mode
           </button>
           <button 
             className={`mode-btn ${mode === 'auto' ? 'active' : ''}`}
-            onClick={() => setMode('auto')}>
+            onClick={() => handleModeChange('auto')}>
             <i className="fas fa-clock"></i>
             Auto Mode
           </button>
@@ -117,27 +173,58 @@ const Camera = () => {
               <i className="fas fa-check"></i>
               Cài đặt
             </button>
+
+            {/* Hiển thị thời gian đã set */}
+            {currentInterval > 0 && (
+              <div className="interval-display">
+                <p>Đang chụp mỗi: {' '}
+                  {currentInterval >= 3600 ? (
+                    `${(currentInterval / 3600).toFixed(1)} giờ`
+                  ) : currentInterval >= 60 ? (
+                    `${(currentInterval / 60).toFixed(1)} phút`
+                  ) : (
+                    `${currentInterval} giây`
+                  )}
+                </p>
+              </div>
+            )}
+
+            {/* Hiển thị lưới ảnh trong chế độ auto */}
+            {autoPhotos.length > 0 && (
+              <div className="auto-photos-grid">
+                <Grid container spacing={2}>
+                  {autoPhotos.map((photo, index) => (
+                    <Grid item xs={12} sm={6} md={4} key={index}>
+                      <div className="auto-image-container">
+                        <img src={photo} alt={`Auto ${index + 1}`} className="auto-preview" />
+                      </div>
+                    </Grid>
+                  ))}
+                </Grid>
+              </div>
+            )}
           </div>
         )}
   
         <style jsx>{`
           .camera-container {
-          width: 100%;
-          height: 100%;
-          min-height: calc(100vh - 60px); /* Trừ đi chiều cao của header nếu có */
-          padding: 20px;
-          background-color: #f8f9fa;
-        }
+            width: 100%;
+            height: 100%;
+            min-height: calc(100vh - 60px);
+            padding: 20px;
+            background-color: #f8f9fa;
+          }
 
-        .card {
-          background: white;
-          border-radius: 20px;
-          padding: 30px;
-          box-shadow: 0 10px 20px rgba(0, 0, 0, 0.1);
-          width: 100%;
-          height: 100%;
-          min-height: calc(100vh - 100px); /* Trừ đi padding và các khoảng cách khác */
-        }
+          .card {
+            background: white;
+            border-radius: 20px;
+            padding: 30px;
+            box-shadow: 0 10px 20px rgba(0, 0, 0, 0.1);
+            width: 100%;
+            height: 100%;
+            min-height: calc(100vh - 100px);
+            transition: all 0.3s ease;
+          }
   
           .card:hover {
             transform: translateY(-5px);
@@ -189,8 +276,27 @@ const Camera = () => {
             align-items: center;
             gap: 20px;
           }
+
+          .capture-button {
+            background: linear-gradient(135deg, #4299e1 0%, #3182ce 100%);
+            color: white;
+            padding: 15px 30px;
+            border-radius: 12px;
+            border: none;
+            cursor: pointer;
+            font-weight: 500;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            transition: all 0.2s ease;
+          }
+
+          .capture-button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(66, 153, 225, 0.4);
+          }
   
-          .capture-button, .set-button {
+          .set-button {
             background: linear-gradient(135deg, #4299e1 0%, #3182ce 100%);
             color: white;
             padding: 15px 30px;
@@ -204,12 +310,12 @@ const Camera = () => {
             transition: all 0.2s ease;
           }
   
-          .capture-button:hover, .set-button:hover {
+          .set-button:hover {
             transform: translateY(-2px);
             box-shadow: 0 5px 15px rgba(66, 153, 225, 0.4);
           }
   
-          .image-container {
+          .image-container, .auto-image-container {
             width: 100%;
             padding: 10px;
             background: #f7fafc;
@@ -217,11 +323,20 @@ const Camera = () => {
             box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.06);
           }
   
-          .preview {
+          .preview, .auto-preview {
             width: 100%;
             height: auto;
             border-radius: 8px;
             display: block;
+          }
+
+          .auto-photos-grid {
+            width: 100%;
+            margin-top: 20px;
+          }
+
+          .auto-image-container {
+            margin-bottom: 20px;
           }
   
           .input-group {
@@ -270,6 +385,23 @@ const Camera = () => {
             border-color: #4299e1;
             background: #ebf8ff;
             color: #2b6cb0;
+          }
+
+          .interval-display {
+            margin-top: 10px;
+            padding: 15px;
+            background: #ebf8ff;
+            border-radius: 12px;
+            color: #2b6cb0;
+            font-weight: 500;
+            text-align: center;
+            border: 2px solid #bee3f8;
+            width: 100%;
+          }
+
+          .interval-display p {
+            margin: 0;
+            font-size: 16px;
           }
         `}</style>
       </div>

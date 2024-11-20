@@ -149,6 +149,14 @@ const Sidebar = () => {
                                         </Link>
                                     </li>
                                     <li className="nav-item">
+                                        <Link href="/cam" className="group">
+                                            <div className="flex items-center">
+                                                <span
+                                                    className="text-black ltr:pl-3 rtl:pr-3 dark:text-[#506690] dark:group-hover:text-white-dark">{t('Camera')}</span>
+                                            </div>
+                                        </Link>
+                                    </li>
+                                    <li className="nav-item">
                                         <Link href="/chuki" className="group">
                                             <div className="flex items-center">
                                                 <span
@@ -156,6 +164,7 @@ const Sidebar = () => {
                                             </div>
                                         </Link>
                                     </li>
+    
                                     {/* <li className="nav-item">
                                         <Link href="" className="group">
                                             <div className="flex items-center">

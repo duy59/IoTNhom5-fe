@@ -16,6 +16,7 @@ import {
   ref as storageRef,
   listAll,
   getDownloadURL,
+  getMetadata
 } from 'firebase/storage';
 import { firestoreDb, storage } from '../../Database/firebaseConfig';
 import {
@@ -45,18 +46,48 @@ const HatchCycleManager = () => {
   const [numberOfEggs, setNumberOfEggs] = useState('');
 
   // Lấy danh sách ảnh từ Firebase Storage
+  // Sửa lại hàm fetchPhotos
   const fetchPhotos = async () => {
     try {
-      const photosRef = storageRef(storage, 'photos/'); // Thư mục photos/
+      const photosRef = storageRef(storage, 'photos/');
       const result = await listAll(photosRef);
-      const urls = await Promise.all(
-        result.items.map((item) => getDownloadURL(item))
-      );
-      setPhotoURLs(urls);
+      
+      // Lấy thời gian bắt đầu của chu kỳ
+      const cycleStartTime = hatchCycle.startDate.toDate().getTime();
+
+      // Lấy metadata của từng ảnh và lọc theo thời gian
+      const photoPromises = result.items.map(async (item) => {
+        try {
+          const metadata = await getMetadata(item);
+          const photoTimeCreated = new Date(metadata.timeCreated).getTime();
+          
+          // Chỉ lấy URL của ảnh nếu thời gian tạo lớn hơn thời gian bắt đầu chu kỳ
+          if (photoTimeCreated > cycleStartTime) {
+            const url = await getDownloadURL(item);
+            return {
+              url,
+              timeCreated: photoTimeCreated
+            };
+          }
+        } catch (metadataError) {
+          console.error('Lỗi khi lấy metadata:', metadataError);
+        }
+        return null;
+      });
+
+      const photos = await Promise.all(photoPromises);
+      // Lọc bỏ các giá trị null và sắp xếp theo thời gian tạo
+      const validPhotos = photos
+        .filter(photo => photo !== null)
+        .sort((a, b) => b.timeCreated - a.timeCreated);
+
+      setPhotoURLs(validPhotos.map(photo => photo.url));
     } catch (error) {
       console.error('Lỗi khi tải ảnh:', error);
     }
   };
+
+console.log("photo " , photoURLs)
 
   // Lấy dữ liệu cảm biến từ Firestore
   useEffect(() => {
@@ -297,7 +328,7 @@ const HatchCycleManager = () => {
                 ))}
               </Carousel>
             ) : (
-              <Text>Không có ảnh nào.</Text>
+              <Text>Không có ảnh nào được chụp trong chu kỳ này.</Text>
             )}
           </Card>
         </>
