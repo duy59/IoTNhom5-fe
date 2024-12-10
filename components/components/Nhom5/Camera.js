@@ -4,7 +4,7 @@ import { ref, set, onValue } from 'firebase/database';
 import { database } from '../../Database/firebaseConfig';
 import { Grid } from '@mui/material';
 
-const Camera = () => {
+const Camera = () => { 
   const [mode, setMode] = useState('manual');
   const [latestPhoto, setLatestPhoto] = useState('');
   const [autoPhotos, setAutoPhotos] = useState([]);
