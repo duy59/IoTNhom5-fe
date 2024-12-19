@@ -1,10 +1,9 @@
 "use client";
 import React, { useState, useEffect , useRef} from 'react';
 import { Empty } from 'antd';
-import {
-  collection, query, where, onSnapshot, addDoc, Timestamp
-} from 'firebase/firestore';
+
 import { ref, set, onValue } from 'firebase/database';
+import { collection, query, where, onSnapshot, addDoc, Timestamp } from 'firebase/firestore';
 import { firestoreDb, database } from '../../Database/firebaseConfig';
 import {
   Card,
@@ -425,6 +424,84 @@ const HatchCycleManager = () => {
   
     return () => unsubscribe();
   }, [currentCycle]);
+
+    
+  // Thêm useEffect để tính toán dữ liệu hàng ngày
+  useEffect(() => {
+    if (!currentCycle) return;
+
+    const calculateDailyStats = (sensorDataList) => {
+      const dailyStats = {};
+      
+      sensorDataList.forEach(data => {
+        const date = new Date(data.timestamp).toLocaleDateString();
+        
+        if (!dailyStats[date]) {
+          dailyStats[date] = {
+            temperatures: [],
+            humidities: [],
+            rotationCount: 0,
+            photoCount: 0,
+            status: 'normal'
+          };
+        }
+        
+        // Thêm nhiệt độ và độ ẩm vào mảng để tính trung bình
+        if (data.temperature) dailyStats[date].temperatures.push(data.temperature);
+        if (data.humidity) dailyStats[date].humidities.push(data.humidity);
+        
+        // Đếm số lần quay trứng (khi servo được bật)
+        if (data.servoEnabled) dailyStats[date].rotationCount++;
+        
+        // Kiểm tra trạng thái
+        if (data.temperature > 38.3 || data.temperature < 37.3 || 
+            data.humidity > 65 || data.humidity < 55) {
+          dailyStats[date].status = 'warning';
+        }
+      });
+
+      // Chuyển đổi thành mảng và tính giá trị trung bình
+      const dailyData = Object.entries(dailyStats).map(([date, stats]) => ({
+        key: date,
+        date: date,
+        averageTemp: stats.temperatures.length 
+          ? (stats.temperatures.reduce((a, b) => a + b, 0) / stats.temperatures.length).toFixed(1)
+          : 0,
+        averageHumidity: stats.humidities.length
+          ? (stats.humidities.reduce((a, b) => a + b, 0) / stats.humidities.length).toFixed(1)
+          : 0,
+        rotationCount: stats.rotationCount,
+        photoCount: cyclePhotos.filter(photo => 
+          new Date(photo.timestamp).toLocaleDateString() === date
+        ).length,
+        status: stats.status,
+        notes: ''
+      }));
+
+      // Sắp xếp theo ngày mới nhất
+      return dailyData.sort((a, b) => new Date(b.date) - new Date(a.date));
+    };
+
+    // Lấy dữ liệu từ collection SensorData
+    const sensorDataRef = collection(firestoreDb, 'SensorData');
+    const q = query(
+      sensorDataRef,
+      where('timestamp', '>=', currentCycle.startDate),
+      where('timestamp', '<=', currentCycle.expectedDate)
+    );
+
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const sensorDataList = snapshot.docs.map(doc => ({
+        ...doc.data(),
+        timestamp: doc.data().timestamp.toDate()
+      }));
+      
+      const dailyStats = calculateDailyStats(sensorDataList);
+      setDailyData(dailyStats);
+    });
+
+    return () => unsubscribe();
+  }, [currentCycle, cyclePhotos]);
   
   return (
     <div className="p-6">
