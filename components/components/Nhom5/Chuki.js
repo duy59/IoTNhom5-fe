@@ -3,7 +3,7 @@ import React, { useState, useEffect , useRef} from 'react';
 import { Empty } from 'antd';
 
 import { ref, set, onValue } from 'firebase/database';
-import { collection, query, where, onSnapshot, addDoc, Timestamp } from 'firebase/firestore';
+import { collection, query, where, onSnapshot, addDoc, Timestamp, getDocs } from 'firebase/firestore';
 import { firestoreDb, database } from '../../Database/firebaseConfig';
 import {
   Card,
@@ -338,7 +338,7 @@ const HatchCycleManager = () => {
   
     const predictAndSave = async () => {
       try {
-        const response = await fetch('https://cmt.drifthuntersgame.io/predict/egg-from-url', {
+        const response = await fetch('http://localhost:5000/predict/egg-from-url', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -369,7 +369,7 @@ const HatchCycleManager = () => {
           
           if (missingTrays > 0) {
             // Gửi request đến API để gửi email
-            await fetch('https://cmt.drifthuntersgame.io/send-email', {
+            await fetch('http://localhost:5000/send-email', {
               method: 'POST',
               headers: {
                 'Content-Type': 'application/json',
@@ -502,6 +502,63 @@ const HatchCycleManager = () => {
 
     return () => unsubscribe();
   }, [currentCycle, cyclePhotos]);
+
+  
+  const createNewCycle = async (values) => {
+    try {
+      // Kiểm tra xem có chu kỳ active nào không
+      const activeQuery = query(
+        collection(firestoreDb, 'chuki'),
+        where('status', '==', 'active')
+      );
+      const activeSnapshot = await getDocs(activeQuery);
+      
+      if (!activeSnapshot.empty) {
+        notification.error({
+          message: 'Không thể tạo chu kỳ mới',
+          description: 'Đã có một chu kỳ đang hoạt động. Vui lòng kết thúc chu kỳ hiện tại trước.',
+        });
+        return;
+      }
+       // Tạo chu kỳ mới
+      const newCycle = {
+        name: values.name,
+        eggType: values.eggType,
+        numberOfEggs: parseInt(values.numberOfEggs),
+        startDate: new Date(),
+        expectedDate: new Date(Date.now() + (values.eggType === 'young' ? 12 : 14) * 24 * 60 * 60 * 1000),
+        status: 'active',
+        temperature: 37.8 // Nhiệt độ mặc định
+      };
+       // Thêm vào Firestore
+      await addDoc(collection(firestoreDb, 'chuki'), newCycle);
+       // Reset form
+      form.resetFields();
+       // Hiển thị thông báo thành công
+      notification.success({
+        message: 'Tạo chu kỳ thành công',
+        description: `Đã tạo chu kỳ "${values.name}"`,
+      });
+       // Khởi tạo cấu hình chụp ảnh tự động
+      const captureRef = ref(database, 'capture');
+      await set(captureRef, {
+        command: false,
+        mode: 'auto',
+        interval: 3600 // Mặc định 1 giờ
+      });
+       // Cập nhật state
+      setMode('auto');
+      setTimeValue('1');
+      setTimeUnit('hours');
+      setCurrentInterval(3600);
+     } catch (error) {
+      console.error('Error creating cycle:', error);
+      notification.error({
+        message: 'Lỗi tạo chu kỳ',
+        description: error.message,
+      });
+    }
+  };
   
   return (
     <div className="p-6">
