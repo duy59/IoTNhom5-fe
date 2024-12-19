@@ -338,7 +338,7 @@ const HatchCycleManager = () => {
   
     const predictAndSave = async () => {
       try {
-        const response = await fetch('http://localhost:3006/predict/egg-from-url', {
+        const response = await fetch('https://cmt.drifthuntersgame.io/predict/egg-from-url', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -369,7 +369,7 @@ const HatchCycleManager = () => {
           
           if (missingTrays > 0) {
             // Gửi request đến API để gửi email
-            await fetch('http://localhost:3006/send-email', {
+            await fetch('https://cmt.drifthuntersgame.io/send-email', {
               method: 'POST',
               headers: {
                 'Content-Type': 'application/json',
